@@ -17,7 +17,15 @@ def check_data(datapath, genotype_path, mode):
     # TODO write checks for multiple genotype files.
     # global groundtruth # why is this a global? # removed did it break something?
     """
-    Example Docstring
+    Checks the dataset and labels for appropriate formatting and datatypes
+    
+    Function Inputs:
+    - datapath (String): Datapath where topology.csv, subjects.csv and other important numpy files stored
+    - genotype_path (String): Path where the genotype matrices files are stored in the genotype.h5 format
+    - mode (String): either "classification" or "regression", allows function to check for mismatch input data/labels
+
+    Outputs:
+    None
     """
     groundtruth = None
     genotype_matrix = False
@@ -27,6 +35,7 @@ def check_data(datapath, genotype_path, mode):
     number_of_covariats = False
     classification_problem = "undetermined"
 
+    # Checks for the existence of the genotype matrices and sets corresponding booleans to true, and prints missing statement otherwise. 
     if os.path.exists(genotype_path + 'genotype.h5'):
         genotype_matrix = True
     elif len(glob.glob(genotype_path + '*.h5')) > 0:
@@ -34,12 +43,15 @@ def check_data(datapath, genotype_path, mode):
     else:
         print("genotype missing in", genotype_path)
 
+    # Checks for existence of network structure via .csv or .npz files, set boolean to true, and prints missing statement otherwise.  
     if os.path.exists(datapath + 'topology.csv'):
         network_structure = True
     elif len(glob.glob(datapath + '*.npz')) > 0:
         network_structure = True
     else:
         print("topology.csv and *.npz are missing")
+
+    # Checks for existence of subject.csv file containing subject ID phenotypes, and reads file into groundtruth Pandas Dataframe
     if os.path.exists(datapath + 'subjects.csv'):
         patient_info = True
         groundtruth = pd.read_csv(datapath + "/subjects.csv")
@@ -49,7 +61,7 @@ def check_data(datapath, genotype_path, mode):
         print('Covariate columns found:', list(groundtruth.filter(like="cov_").columns.values))
         
         if {'patient_id', 'labels', 'genotype_row', 'set'}.issubset(groundtruth.columns):
-            classification_problem = ((groundtruth["labels"].values == 0) | (groundtruth["labels"].values == 1)).all()
+            classification_problem = ((groundtruth["labels"].values == 0) | (groundtruth["labels"].values == 1)).all() # Sets Classification_problem boolean to True if labels only contain 0s and 1s, False otherwise
         else:
             print("column names missing need 'patient_id', 'labels', 'genotype_row', 'set', got:",
                   groundtruth.columns.values)
@@ -57,8 +69,10 @@ def check_data(datapath, genotype_path, mode):
     else:
         print("subjects.csv is missing")
 
+    # Print the mode inputted into function
     print("mode is", mode)
-    
+
+    # Ensures Groundtruth Dataframe label values matches the corresponding modes ("classification" vs "regression"), throws error otherwise
     if (mode == "classification") and classification_problem:
         pass
     elif (mode == "regression") and not classification_problem:
@@ -70,6 +84,7 @@ def check_data(datapath, genotype_path, mode):
               "The labels do have the following values", groundtruth["labels"].unique())
         exit()
 
+    # Checks that genotype file(s), network structure, and patient info are all present, otherwise prints error message if any files missing
     if multiple_genotype_matrices & network_structure & patient_info:
         TrainDataGenerator.multi_h5 = True
         return
