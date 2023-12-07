@@ -16,6 +16,9 @@ matplotlib.use('agg')
 def check_data(datapath, genotype_path, mode):
     # TODO write checks for multiple genotype files.
     # global groundtruth # why is this a global? # removed did it break something?
+    """
+    Example Docstring
+    """
     groundtruth = None
     genotype_matrix = False
     network_structure = False
