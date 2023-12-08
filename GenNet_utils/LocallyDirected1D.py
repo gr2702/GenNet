@@ -112,6 +112,8 @@ class LocallyDirected1D(Layer):
                  bias_constraint=None,
                  **kwargs):
         super(LocallyDirected1D, self).__init__(**kwargs)
+
+        #Initialize the layer parameters
         self.filters = filters
         self.padding = conv_utils.normalize_padding(padding)
         self.data_format = conv_utils.normalize_data_format(data_format)
@@ -128,6 +130,7 @@ class LocallyDirected1D(Layer):
         self.mask = mask
         self.input_filters = None
 
+    #Build the layer based on the input shape (passed as parameter)
     @tf_utils.shape_type_conversion
     def build(self, input_shape):
         if self.data_format == 'channels_first':
@@ -139,16 +142,19 @@ class LocallyDirected1D(Layer):
             raise ValueError('Axis 2 of input should be fully-defined. '
                              'Found shape:', input_shape)
             
+        # Set input filters and output length based on mask shape
         self.input_filters = input_dim
         self.output_length = self.mask.shape[1] 
 
+        #Set the shape of the kernel based on the data_format 
         if self.data_format == 'channels_first':
             self.kernel_shape = (input_dim, input_length,
                                  self.filters, self.output_length)
         else:
             self.kernel_shape = (input_length, input_dim,
                                  self.output_length, self.filters)
-        
+
+        #Add weight for the kernel (the weight matrix)
         self.kernel = self.add_weight(shape=(len(self.mask.data), input_dim*self.filters ),    
         #sum of all nonzero values in mask sum(sum(mask))
                             initializer=self.kernel_initializer,
@@ -156,9 +162,10 @@ class LocallyDirected1D(Layer):
                             regularizer=self.kernel_regularizer,
                             constraint=self.kernel_constraint)
                         
-
+        #Get the kernel indices for more efficiency
         self.kernel_idx = self.get_idx()
 
+        #Add bias if it is specificied to be added
         if self.use_bias:
             self.bias = self.add_weight(
                 shape=(self.output_length, self.filters * self.input_filters),
@@ -169,12 +176,14 @@ class LocallyDirected1D(Layer):
         else:
             self.bias = None
 
+        #Set input specifications based on the data format
         if self.data_format == 'channels_first':
             self.input_spec = InputSpec(ndim=3, axes={1: input_dim})
         else:
             self.input_spec = InputSpec(ndim=3, axes={-1: input_dim})
         self.built = True
 
+    #Implements the forward of the layer
     def call(self, inputs):
         output_filters = []
         for i in range(self.input_filters): 
@@ -223,7 +232,7 @@ class LocallyDirected1D(Layer):
         inputs_flat = Kb.reshape(inputs, (Kb.shape(inputs)[0], -1))
         output_filters = []
         for i in range(self.filters):
-
+            # Sparse matrix multiplication using TensorFlow's function
             output_flat = sparse_dense_matmul(sp_a= SparseTensor(kernel_idx, kernel, (mask.shape[1], mask.shape[0])),
                                               b=inputs_flat, adjoint_b=True)
 
@@ -231,11 +240,13 @@ class LocallyDirected1D(Layer):
 #                                                                                  (mask.shape[1], mask.shape[0]), 
 #                                                                                  inputs_flat, adjoint_b=True)
 
+            #Transpose and reshape the output
             output_flat_transpose = Kb.transpose(output_flat)
 
             output_reshaped = Kb.reshape(output_flat_transpose, [-1, output_length, 1]) # gene dimension extension shaped back
             output_filters.append(output_reshaped)
-            
+
+        #Concatenate the output filters
         output = concat(output_filters, axis=-1)
         
         return output
@@ -250,6 +261,7 @@ class LocallyDirected1D(Layer):
         return coor_list
 
     def get_config(self):
+        #Return the configuration of the layer
         config = {
             # 'mask':  # replace by two numpy arrays with indices
             # self.mask,
