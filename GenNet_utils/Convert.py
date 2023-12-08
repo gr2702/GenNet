@@ -162,7 +162,7 @@ def impute_hase_hdf5_no_chunk(args):
 
     return hdf5_name
 
-#Same as above impute the missing values with the means 
+#Same as above: impute the missing values with the means, however split data into chunks to decrease use of memory
 def impute_hase_hdf5(args):
     t = tables.open_file(args.genotype + args.study_name + '_step2_merged_genotype.h5', mode='r')
     print('merged shape =', t.root.data.shape)
@@ -203,25 +203,32 @@ def impute_hase_hdf5(args):
     args.outfolder = args.genotype
     return hdf5_name
 
-
 def exclude_variants(args):
     print("Selecting the variants..")
+
+    #Open genotype HDF5 file without the imputations in read mode and get the num of patients and num of variants
     t = tables.open_file(args.genotype + args.study_name + '_step3_genotype_no_missing.h5', mode='r')
     data = t.root.data
     num_pat = data.shape[1]
     num_variants = data.shape[0]
 
+    #Get the list of indicies of selected variants
     used_indices = pd.read_csv(args.variants, header=None)
 
+    #Define the name of the file that will contain the selected variants data
     hdf5_name = args.study_name + '_step4_genotype_selected_variants.h5'
 
+    #Check if the number of variants is equal to the expected number 
     if len(used_indices) == num_variants:
+
+        #Extract the indices and create a new HDF5 file for the selected variants
         used_indices = used_indices.index.values[used_indices.values.flatten()]
         f = tables.open_file(args.outfolder + args.study_name + '_step4_genotype_selected_variants.h5', mode='w')
         f.create_earray(f.root, 'data', tables.IntCol(), (0, num_pat), expectedrows=len(used_indices),
                         filters=tables.Filters(complib='zlib', complevel=args.comp_level))
         f.close()
 
+        #Open the newly created file and append the selected vairants 
         f = tables.open_file(args.outfolder + args.study_name + '_step4_genotype_selected_variants.h5', mode='a')
         for feat in tqdm.tqdm(used_indices):
             a = data[feat, :]
@@ -229,9 +236,12 @@ def exclude_variants(args):
             f.root.data.append(a)
         f.close()
         t.close()
+
+        #Update the output folder path
         args.outfolder = args.genotype
         return hdf5_name
 
+    #The else statement if the number of variants is differet from expected and print error message
     else:
         print("Something wrong with the included_snps file.")
         print("Expected " + str(num_variants) + "but got " + str(len(used_indices)))
@@ -240,10 +250,13 @@ def exclude_variants(args):
 
 
 def transpose_genotype(args):
+
+    #Define the file names of each of the steps 
     step4_name = args.genotype + '/' + args.study_name + '_step4_genotype_selected_variants.h5'
     step3_name = args.genotype + '/' + args.study_name + '_step3_genotype_no_missing.h5'
     step2_name = args.genotype + '/' + args.study_name + '_step2_merged_genotype.h5'
-    
+
+    #Determine which step to use based on which file exists
     if (os.path.exists(step4_name)):
         t = tables.open_file(step4_name, mode='r')
     elif (os.path.exists(step3_name)):
@@ -255,20 +268,26 @@ def transpose_genotype(args):
     else: 
         print('no valid genotype found')
 
+    #Extract the data from the step that was selected HDF5 file
     data = t.root.data
     num_pat = data.shape[1]
     num_feat = data.shape[0]
+
+    #Calculate the size of the chunk based on the parameters given by the user
     chunk = args.tcm // num_feat
     chunk = int(np.clip(chunk, 1, num_pat))
     print("chuncksize =", chunk)
 
+    #Create a new HDF5 file for the new transposed genotype data
     f = tables.open_file(args.outfolder + '/genotype.h5', mode='w')
     f.create_earray(f.root, 'data', tables.IntCol(), (0, num_feat), expectedrows=num_pat,
                     filters=tables.Filters(complib='zlib', complevel=args.comp_level))
     f.close()
 
+    #Open the new file in append mode to be able to add transposed data in chunks
     f = tables.open_file(args.outfolder + '/genotype.h5', mode='a')
-
+    
+    # Append transposed data to the new HDF5 file in chunks
     for pat in tqdm.tqdm(range(int(np.ceil(num_pat / chunk) + 1))):
         begins = pat * chunk
         tills = min(((pat + 1) * chunk), num_pat)
@@ -277,6 +296,8 @@ def transpose_genotype(args):
         f.root.data.append(a)
     f.close()
     t.close()
+
+    #Print message of completion
     print("Completed", args.study_name)
     print("You can delete all other h5 files if genotype.h5 is correct")
     args.outfolder = args.genotype
