@@ -96,6 +96,16 @@ def check_data(datapath, genotype_path, mode):
 
 
 def get_inputsize(genotype_path):
+    """
+    Loads the first HDF5 file (.h5) as a File object and returns the input size of that File
+    
+    Input:
+    - genotype_path (String): Path where the genotype matrices files are stored in the genotype.h5 format
+
+    Output:
+    - inputsize (Integer): 
+    """
+    
     single_genotype_path = glob.glob(genotype_path + '*.h5')[0]
     h5file = tables.open_file(single_genotype_path, "r")
     inputsize = h5file.root.data.shape[1]
@@ -104,6 +114,16 @@ def get_inputsize(genotype_path):
 
 
 def get_labels(datapath, set_number):
+    """
+    Extract the phenotypic labels (integers) from subjects.csv file that matches the set_number 
+    
+    Inputs:
+    - datapath (String): Datapath where topology.csv, subjects.csv and other important numpy files stored
+    - set_number (Integer): The set to which a patient belongs (1 = training set, 2 = validation set, 3 = test, others= ignored)
+
+    Output:
+    - ybatch (Numpy array of integers): Array of phenotypic labels representing 0s and 1s for classification and values for regression
+    """
     groundtruth = pd.read_csv(datapath + "/subjects.csv")
     groundtruth = groundtruth[groundtruth["set"] == set_number]
     ybatch = np.reshape(np.array(groundtruth["labels"].values), (-1, 1))
@@ -111,6 +131,18 @@ def get_labels(datapath, set_number):
 
 
 def get_data(datapath, genotype_path, set_number):
+    """
+    Extract Genotype File object with the genotype row values that match the set_number and Array of phenotypic labels representing 0s and 1s for classification and values for regression
+    
+    Inputs:
+    - datapath (String): Datapath where topology.csv, subjects.csv and other important numpy files stored
+    - genotype_path (String): Path where the genotype matrices files are stored in the genotype.h5 format
+    - set_number (Integer): The set to which a patient belongs (1 = training set, 2 = validation set, 3 = test, others= ignored)
+
+    Outputs:
+    - xbatch: Genotype File object with the genotype row values that match the set_number 
+    - ybatch (Numpy array of integers): Array of phenotypic labels representing 0s and 1s for classification and values for regression
+    """
     print("depreciated")
     groundtruth = pd.read_csv(datapath + "/subjects.csv")
     h5file = tables.open_file(genotype_path + "genotype.h5", "r")
@@ -126,8 +158,32 @@ def get_data(datapath, genotype_path, set_number):
 
 
 class TrainDataGenerator(K.utils.Sequence):
+"""
+TrainDataGenerator class that inherits from tf.keras.utils.Sequence object for fitting to a sequence of data. Advantage over a typical generator object is that
+this class will guarantee that the network only trains once on each sample per epoch.
 
+Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ methods. 
+"""
+
+    
     def __init__(self, datapath, genotype_path, batch_size, trainsize, inputsize, epoch_size, shuffle=True, one_hot=False):
+        """
+        Constructor for class TrainDataGenerator. Sets necessary attributes. Shuffle training indexes attribute depending on one_hot boolean.
+
+        Inputs:
+        - datapath (String): Datapath where topology.csv, subjects.csv and other important numpy files stored
+        - genotype_path (String): Path where the genotype matrices files are stored in the genotype.h5 format
+        - batch_size (Integer): batch size for training
+        - trainsize (Integer): Size of the training data
+        - inputsize (Integer): Size of the input data
+        - epoch_size (Integer): number of epochs to train
+        - shuffle (Boolean): whether or not to shuffle training dataset
+        - one_hot (Boolean): whether or not to one_hot encode xbatch data
+
+        Output:
+        None 
+        """
+        
         self.datapath = datapath
         self.batch_size = batch_size
         self.genotype_path = genotype_path
@@ -147,10 +203,22 @@ class TrainDataGenerator(K.utils.Sequence):
             np.random.shuffle(self.shuffledindexes)
 
     def __len__(self):
+        """
+        Return the number of batches (Integer) in the Sequence.
+        """
         return int(np.ceil(self.epoch_size / float(self.batch_size)))
         
 
     def __getitem__(self, idx):
+        """
+        Gets batch of xbatch, ybatch data at position idx from genotype matrix
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Outputs:
+        xbatch, ybatch: batch data at position idx with array of genotype row values and phenotypic labels
+        """
         if self.multi_h5:
             xbatch, ybatch = self.multi_genotype_matrix(idx)
         else:
