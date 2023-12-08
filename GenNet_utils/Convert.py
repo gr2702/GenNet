@@ -108,16 +108,18 @@ def merge_hdf5_hase(args):
 
 
 def impute_hase_hdf5_no_chunk(args):
-    #Open
+    #Open the merged genotypes file in the read mode (mode='r') and num of SNPs (features) and num of patients
     t = tables.open_file(args.genotype + args.study_name + '_step2_merged_genotype.h5', mode='r')
     print('merged shape =', t.root.data.shape)
     num_SNPS = t.root.data.shape[0]
     num_pat = t.root.data.shape[1]
 
+    #Define the name of the file after imputation, then read and print the probe data from the probes HDF5 file
     hdf5_name = args.study_name + '_step3_genotype_no_missing.h5'
     p = pd.read_hdf(args.genotype + '/probes/' + args.study_name + ".h5")
     print('probe shape =', p.shape)
 
+    #Prompt that imputing missing values is starting and create new file with the imputed genotypes
     print("\n impute missing...")
     f = tables.open_file(args.outfolder + args.study_name + '_step3_genotype_no_missing.h5', mode='w')
     atom = tables.Int8Col()
@@ -126,20 +128,34 @@ def impute_hase_hdf5_no_chunk(args):
     f.create_earray(f.root, 'data', atom, (0, num_pat), filters=filter_zlib)
     f.close()
 
+    #Initialize an array that will store the standard deviations of the SNPs and open the imputed genotype HDF5 file 'f' in append mode (mode = 'a')
     stdSNPs = np.zeros(num_SNPS)
     f = tables.open_file(args.outfolder + args.study_name + '_step3_genotype_no_missing.h5', mode='a')
 
+    # Loop through each SNP in the merged data
     for i in tqdm.tqdm(range(t.root.data.shape[0])):
+        # Extract SNP data for imputation
         d = t.root.data[i, :].astype("float32")
+
+        # Identify missing values (labeled as 9) and replace them with NaN
         m = np.where(d == 9)
         d[m] = np.nan
+
+        # Impute missing values with the mean of non-missing values
         d[m] = np.nanmean(d)
+
+        # Reshape the imputed data and append to the new HDF5 file
         d = d[np.newaxis, :]
         f.root.data.append(np.round(d).astype(np.int8))
+
+        # Calculate and store the standard deviation of the imputed data to the previously made array for std's
         stdSNPs[i] = np.std(d)
+
+    #Close the imputed and merged genotype HDF5 files 
     f.close()
     t.close()
 
+    #Save, update the output folder, and return HDF5 filename
     np.save(args.outfolder + args.study_name + '_std.npy', stdSNPs)
 
     args.outfolder = args.genotype
