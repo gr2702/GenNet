@@ -35,7 +35,8 @@ def train_classification(args):
     wpc = args.wpc
     lr_opt = args.learning_rate
     batch_size = args.batch_size
-    epochs = args.epochs
+    #epochs = args.epochs
+    epochs = 100
     l1_value = args.L1
     L1_act = args.L1_act
     problem_type = args.problem_type
