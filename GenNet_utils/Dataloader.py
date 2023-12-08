@@ -227,7 +227,16 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
         return xbatch, ybatch
 
 
-    def if_one_hot(self, xbatch):       
+    def if_one_hot(self, xbatch): 
+        """
+        One-hot encode the xbatch data if the dimensions are equal to 2, otherwise return as is
+
+        Input:
+        - xbatch: Array of genotype row values
+
+        Output:
+        - xbatch: one-hot encoded input values if xbatch_dim shape == 2
+        """
         xbatch_dim = len(xbatch.shape) 
         if self.one_hot:
             if xbatch_dim == 3:
@@ -240,11 +249,21 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
     
     
     def single_genotype_matrix(self, idx):
-        idx2 = idx + self.count_after_shuffle      
+        """
+        Returns the idx shifted shuffled batch data of the single genotype matrix as well as the xcov values
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Output:
+        - [xbatch, xcov] (Tuple): batch data of genotype row labels and cov columns of updated shuffled batch indexes
+        - ybatch (Numpy Array): batch data of phenotypic labels of updated shuffled batch indexes 
+        """
+        idx2 = idx + self.count_after_shuffle  # Add index to rolling counter      
         genotype_hdf = tables.open_file(self.genotype_path + "/genotype.h5", "r")
-        batchindexes = self.shuffledindexes[idx2 * self.batch_size:((idx2 + 1) * self.batch_size)]
-        ybatch = self.training_subjects["labels"].iloc[batchindexes]
-        xcov = self.training_subjects.filter(like="cov_").iloc[batchindexes]
+        batchindexes = self.shuffledindexes[idx2 * self.batch_size:((idx2 + 1) * self.batch_size)] # subsets the shuffled index
+        ybatch = self.training_subjects["labels"].iloc[batchindexes] # subsets the training subject labels with the subsetted batch index 
+        xcov = self.training_subjects.filter(like="cov_").iloc[batchindexes] # subsets the training subject covariance values with the subsetted batch index 
         xcov = xcov.values
         xbatchid = np.array(self.training_subjects["genotype_row"].iloc[batchindexes], dtype=np.int64)
         xbatch = genotype_hdf.root.data[xbatchid, :] 
@@ -254,6 +273,17 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
         return [xbatch, xcov], ybatch
 
     def multi_genotype_matrix(self, idx):
+        """
+        Returns the idx shifted shuffled batch data of all the multiple genotype matrices as well as the xcov values
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Output:
+        - [xbatch, xcov] (Tuple): batch data of genotype row labels and cov columns of updated shuffled batch indexes
+        - ybatch (Numpy Array): batch data of phenotypic labels of updated shuffled batch indexes 
+        """
+        
         idx2 = idx + self.count_after_shuffle 
         batchindexes = self.shuffledindexes[idx2 * self.batch_size:((idx2 + 1) * self.batch_size)]
         ybatch = self.training_subjects["labels"].iloc[batchindexes]
@@ -264,7 +294,7 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
         subjects_current_batch = self.training_subjects.iloc[batchindexes]
         subjects_current_batch["batch_index"] = np.arange(len(subjects_current_batch))
         xbatch = np.zeros((len(ybatch), self.inputsize))
-        for i in subjects_current_batch["chunk_id"].unique():
+        for i in subjects_current_batch["chunk_id"].unique(): # looping through the training subjects corresponding to the shuffled batch indexes, for every chunk_id
             genotype_hdf = tables.open_file(self.genotype_path + "/" + str(i) + self.h5filenames + ".h5", "r")
             subjects_current_chunk = subjects_current_batch[subjects_current_batch["chunk_id"] == i]
             xbatchid = np.array(subjects_current_chunk["genotype_row"].values, dtype=np.int64)
@@ -280,7 +310,7 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
         return [xbatch, xcov], ybatch
 
     def on_epoch_end(self):
-        """Updates indexes after each epoch"""
+        """Updates indexes after each epoch, shuffles index if remaining data is less than the epoch size, otherwise updates the shuffle counter"""
         left_in_epoch = self.left_in_greater_epoch - self.epoch_size
         print(left_in_epoch, 'left_in_epoch')
         if  left_in_epoch < self.epoch_size: 
@@ -298,6 +328,22 @@ Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ meth
 class EvalGenerator(K.utils.Sequence):
 
     def __init__(self, datapath, genotype_path, batch_size, setsize, inputsize, evalset="undefined", one_hot=False):
+        """
+        Constructor for class EvalGenerator. Sets necessary attributes. Setting evaluation set to validation or test depending on input
+
+        Inputs:
+        - datapath (String): Datapath where topology.csv, subjects.csv and other important numpy files stored
+        - genotype_path (String): Path where the genotype matrices files are stored in the genotype.h5 format
+        - batch_size (Integer): batch size for training
+        - setsize (Integer): Size of the set data
+        - inputsize (Integer): Size of the input data
+        - evalset (String): Argument for specifying "validation" or "test" set to use
+        - one_hot (Boolean): whether or not to one_hot encode xbatch data
+
+        Output:
+        None 
+        """
+        
         self.datapath = datapath
         self.batch_size = batch_size
         self.yvalsize = setsize
@@ -317,10 +363,24 @@ class EvalGenerator(K.utils.Sequence):
             print("please add which evalset should be used in the call, validation or test. Currently undefined")
 
     def __len__(self):
+        """
+        Return the number of batches (Integer) in the Sequence.
+        """
+        
         val_len = int(np.ceil(self.yvalsize / float(self.batch_size)))
         return val_len
 
     def __getitem__(self, idx):
+        """
+        Gets batch of xbatch, ybatch data at position idx from genotype matrix
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Outputs:
+        xbatch, ybatch: batch data at position idx with array of genotype row values and phenotypic labels
+        """
+        
         if self.multi_h5:
             xbatch, ybatch = self.multi_genotype_matrix(idx)
         else:
@@ -328,7 +388,17 @@ class EvalGenerator(K.utils.Sequence):
 
         return xbatch, ybatch
 
-    def if_one_hot(self, xbatch):       
+    def if_one_hot(self, xbatch):  
+        """
+        One-hot encode the xbatch data if the dimensions are equal to 2, otherwise return as is
+
+        Input:
+        - xbatch: Array of genotype row values
+
+        Output:
+        - xbatch: one-hot encoded input values if xbatch_dim shape == 2
+        """
+        
         xbatch_dim = len(xbatch.shape) 
         if self.one_hot:
             if xbatch_dim == 3:
@@ -340,6 +410,17 @@ class EvalGenerator(K.utils.Sequence):
         return xbatch
     
     def single_genotype_matrix(self, idx):
+        """
+        Returns the idx batch data of the single genotype matrix of the evaluation subjects as well as the xcov values
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Output:
+        - [xbatch, xcov] (Tuple): batch data of genotype row labels and cov columns of the evaluation subjects
+        - ybatch (Numpy Array): batch data of phenotypic labels of the evaluation subjects
+        """
+        
         genotype_hdf = tables.open_file(self.genotype_path + "/genotype.h5", "r")
         ybatch = self.eval_subjects["labels"].iloc[idx * self.batch_size:((idx + 1) * self.batch_size)]
         xcov = self.eval_subjects.filter(like="cov_").iloc[idx * self.batch_size:((idx + 1) * self.batch_size)]
@@ -353,13 +434,24 @@ class EvalGenerator(K.utils.Sequence):
         return [xbatch, xcov], ybatch
 
 
-    def multi_genotype_matrix(self, idx):      
+    def multi_genotype_matrix(self, idx):     
+        """
+        Returns the idx batch data of the single genotype matrix of the evaluation subjects in the multiple genotype matrices as well as the xcov values
+        
+        Input:
+        - idx (Integer): position of the batch in the Sequence 
+
+        Output:
+        - [xbatch, xcov] (Tuple): batch data of genotype row labels and cov columns of the evaluation subjects
+        - ybatch (Numpy Array): batch data of phenotypic labels of the evaluation subjects
+        """
+        
         subjects_current_batch = self.eval_subjects.iloc[idx * self.batch_size:((idx + 1) * self.batch_size)]
         subjects_current_batch["batch_index"] = np.arange(subjects_current_batch.shape[0])
               
         xbatch = np.zeros((len(subjects_current_batch["labels"]), self.inputsize))
 
-        for i in subjects_current_batch["chunk_id"].unique():
+        for i in subjects_current_batch["chunk_id"].unique(): # Looping through the current batch of evaluation subjects by unique chunk_id values
             genotype_hdf = tables.open_file(self.genotype_path + "/" + str(i) + self.h5filenames + ".h5", "r")
             subjects_current_chunk = subjects_current_batch[subjects_current_batch["chunk_id"] == i]
             xbatchid = np.array(subjects_current_chunk["genotype_row"].values, dtype=np.int64)
