@@ -1,3 +1,4 @@
+#Import necessary librariers and modules
 import glob
 import os
 import sys
@@ -7,20 +8,29 @@ import numpy as np
 import pandas as pd
 import tables
 import tqdm
+
+#Append the necessary path to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
+#Import any functions from other directories in GenNet project
 from GenNet_utils.Utility_functions import query_yes_no
 from GenNet_utils.hase.config import basedir, CONVERTER_SPLIT_SIZE, PYTHON_PATH
 
+
+#Set the environment variable
 os.environ['HASEDIR'] = basedir
 if PYTHON_PATH is not None:
     for i in PYTHON_PATH: sys.path.insert(0, i)
+        
+#Import any functions from other directories in GenNet project        
 from GenNet_utils.hase.hdgwas.tools import Timer, check_converter
 from GenNet_utils.hase.hdgwas.converter import GenotypePLINK, GenotypeMINIMAC, GenotypeVCF
 from GenNet_utils.hase.hdgwas.data import Reader
 
-
+#Defining the main function that converts the genotype data
 def hase_convert(args):
+    #First check if the folders containing the converted genotype data exists, if it does, return it, if not, continue
     if (os.path.exists(args.outfolder + '/probes/')) and (os.path.exists(args.outfolder + '/genotype/')) and (
             os.path.exists(args.outfolder + '/individuals/')):
         print("The folders: probes, genotype and individuals already exist. Data seems already in HASE format. Delete "
@@ -29,11 +39,15 @@ def hase_convert(args):
     else:
         print('using', args.outfolder)
 
+    #Create a reader instance for the genotype data
     R = Reader('genotype')
 
+    #Start reading the data with the optional VCF Input
     R.start(args.genotype[0], vcf=args.vcf)
 
+    #Measure the time that is taken for converting data to HASE format
     with Timer() as t:
+        #Depending on the data (PLINK, MINIMAC, VCF) format convert to HDF5 format using specific converter defs 
         if R.format == 'PLINK':
             G = GenotypePLINK(args.study_name[0], reader=R)
             G.split_size = CONVERTER_SPLIT_SIZE
@@ -51,6 +65,7 @@ def hase_convert(args):
         else:
             raise ValueError('Genotype data should be in PLINK/MINIMAC/VCF format and alone in folder')
 
+    #Check the conversion
     check_converter(args.out, args.study_name[0])
     args.outfolder = args.genotype
     print(('Time to convert all data: {} sec'.format(t.secs)))
