@@ -108,6 +108,7 @@ def merge_hdf5_hase(args):
 
 
 def impute_hase_hdf5_no_chunk(args):
+    #Open
     t = tables.open_file(args.genotype + args.study_name + '_step2_merged_genotype.h5', mode='r')
     print('merged shape =', t.root.data.shape)
     num_SNPS = t.root.data.shape[0]
