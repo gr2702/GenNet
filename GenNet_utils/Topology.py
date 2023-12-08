@@ -172,6 +172,9 @@ def Create_gene_to_GTEx(args):
 
 
 def topology(args):
+    """
+    Generating the topology network depending on the type of input argument and its associated Database (Annovar documentation, Gene netowrk, KEGG Pathway Database, and GTEx project)
+    """
     if args.type == 'create_annovar_input':
         Create_Annovar_input(args)
     elif args.type == 'create_gene_network':
