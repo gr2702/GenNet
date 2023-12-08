@@ -47,7 +47,7 @@ def hase_convert(args):
 
     #Measure the time that is taken for converting data to HASE format
     with Timer() as t:
-        #Depending on the data (PLINK, MINIMAC, VCF) format convert to HDF5 format using specific converter defs 
+        #Depending on the data (PLINK, MINIMAC, VCF) format convert to HASE in HDF5 file format using specific converter defs 
         if R.format == 'PLINK':
             G = GenotypePLINK(args.study_name[0], reader=R)
             G.split_size = CONVERTER_SPLIT_SIZE
@@ -71,7 +71,7 @@ def hase_convert(args):
     print(('Time to convert all data: {} sec'.format(t.secs)))
     return
 
-
+#Definition to merge all HDF5 files to the out folder
 def merge_hdf5_hase(args):
     print(args.genotype, type(args.genotype))
     filepath_hase = args.genotype + '/genotype/{}_' + args.study_name + '.h5'
