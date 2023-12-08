@@ -25,14 +25,14 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.python.keras import activations
-from tensorflow.python.keras import backend as K
-from tensorflow.python.keras import constraints
-from tensorflow.python.keras import initializers
-from tensorflow.python.keras import regularizers
-from tensorflow.python.keras.engine.base_layer import InputSpec
+from tensorflow.python.keras import activations # layer activation functions 
+from tensorflow.python.keras import backend as K # backend is computational engine executing operations and computations 
+from tensorflow.python.keras import constraints # module for setting model parameter constraints during training
+from tensorflow.python.keras import initializers # module for setting initial rarndom weights of layers
+from tensorflow.python.keras import regularizers # module for regularization penalties for each layer
+from tensorflow.python.keras.engine.base_layer import InputSpec # specified rank, dtype, and shape of every input to a layer
 from tensorflow.python.keras.engine.base_layer import Layer
-from tensorflow.python.keras.utils import conv_utils
+from tensorflow.python.keras.utils import conv_utils 
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.util.tf_export import tf_export
 
@@ -121,9 +121,9 @@ class LocallyDirected1D(Layer):
                  **kwargs):
         super(LocallyDirected1D, self).__init__(**kwargs)
         self.filters = filters
-        self.padding = conv_utils.normalize_padding(padding)
-        self.data_format = conv_utils.normalize_data_format(data_format)
-        self.activation = activations.get(activation)
+        self.padding = conv_utils.normalize_padding(padding) # using keras.utils existing conv_utils to implement similar padding to Conv1D
+        self.data_format = conv_utils.normalize_data_format(data_format) # using keras.utils existing conv_utils to implement similar data output formatting to Conv1D
+        self.activation = activations.get(activation) # using keras activations to set attribute to existing activation function
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
@@ -137,16 +137,30 @@ class LocallyDirected1D(Layer):
 
     @tf_utils.shape_type_conversion
     def build(self, input_shape):
+        """
+        Build the Kernel, Kernel Mask, and Bias variables based on the passed in arguments and class attributes/shapes
+        
+        Input:
+        - input_shape (Tuple): elements of 3 dimensions: (batch, length, channels) or (batch, channels, length) dpeneding on channels_first boolean
+
+        Output:
+        None
+        """
+
+        # Extract the channels and length dimensions of the input
         if self.data_format == 'channels_first':
             input_dim, input_length = input_shape[1], input_shape[2]
         else:
             input_dim, input_length = input_shape[2], input_shape[1]
 
+        # Raise Error if no channels defined 
         if input_dim is None:
             raise ValueError('Axis 2 of input should be fully-defined. '
                              'Found shape:', input_shape)
         self.output_length = self.mask.shape[1]
 #         print("output length is " + str(self.output_length))
+
+        # Set Kernel Shape based on input dimensions and args
         if self.data_format == 'channels_first':
             self.kernel_shape = (input_dim, input_length,
                                  self.filters, self.output_length)
@@ -154,17 +168,20 @@ class LocallyDirected1D(Layer):
             self.kernel_shape = (input_length, input_dim,
                                  self.output_length, self.filters)
 
+        # Set Kernel to be the new variable added to the layer with the specified kernel attributes and shape
         self.kernel = self.add_weight(shape=(len(self.mask.data),),  # sum of all nonzero values in mask sum(sum(mask))
                                       initializer=self.kernel_initializer,
                                       name='kernel',
                                       regularizer=self.kernel_regularizer,
                                       constraint=self.kernel_constraint)
 
+        # Set Kernel mask to be the output of the get_locallyDirected1D_mask function below, see documentation for what it returns 
         self.kernel_mask = get_locallyDirected1D_mask(self.mask, self.kernel,
                                                       data_format=self.data_format,
                                                       dtype=self.kernel.dtype
                                                       )
 
+        # Set self.bias to be new variable added to the layer with the specified bias attributes and shape
         if self.use_bias:
             self.bias = self.add_weight(
                 shape=(self.output_length, self.filters),
@@ -175,6 +192,7 @@ class LocallyDirected1D(Layer):
         else:
             self.bias = None
 
+        # Sets attribute to specify rank, dtype, and shape of every input to layer depending on channels_first
         if self.data_format == 'channels_first':
             self.input_spec = InputSpec(ndim=3, axes={1: input_dim})
         else:
@@ -186,16 +204,34 @@ class LocallyDirected1D(Layer):
         # output = local_conv_matmul(inputs, self.kernel_mask,
         #                            self.output_length)
 
+        """
+        Perform the local N-D convolution with un-shared weights and added bias, and return the output of the activation function applied to the convolution result
+        
+        Input:
+        - inputs: (N+2)-D tensor with shape
+          `(batch_size, channels_in, d_in1, ..., d_inN)`
+          or
+          `(batch_size, d_in1, ..., d_inN, channels_in)`.
+
+        Output:
+        - output: Output (N+2)-D tensor with shape `output_shape`.
+        """
+        
         output = local_conv_matmul_sparse(inputs, self.kernel_mask,
                                           self.output_length, self.filters)
 
+        # Add the bias to the convolution output tensor result if needed
         if self.use_bias:
             output = K.bias_add(output, self.bias, data_format=self.data_format)
 
+        # Pass the convolution output through the activation function to be returned 
         output = self.activation(output)
         return output
 
     def get_config(self):  # delete this?
+        """
+        Return a dictionary of the base_configuration super attributes as well as the attributes of this class. 
+        """
         config = {
             'filters':
                 self.filters,
