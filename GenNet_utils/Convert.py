@@ -73,21 +73,32 @@ def hase_convert(args):
 
 #Definition to merge all HDF5 files to the out folder
 def merge_hdf5_hase(args):
+    #Print the input arguments for debugging purposes
     print(args.genotype, type(args.genotype))
+
+    #Define the pattern for accessing individual HDF5 files
     filepath_hase = args.genotype + '/genotype/{}_' + args.study_name + '.h5'
+
+    #Open the first file and extract the number of patients 
     g = h5py.File(filepath_hase.format(0), 'r')['genotype']
     num_pat = g.shape[1]
+
+    #Count the total number of HDF5 files that need to be merged
     number_of_files = len(glob.glob(args.genotype + "/genotype/*.h5"))
     print('number of files ', number_of_files)
 
+    #Create a new file to contain all merged HDF5 genotype data
     f = tables.open_file(args.outfolder + args.study_name + '_step2_merged_genotype.h5', mode='w')
     atom = tables.Int8Col()
     filter_zlib = tables.Filters(complib='zlib', complevel=args.comp_level)
     f.create_earray(f.root, 'data', atom, (0, num_pat), filters=filter_zlib)
     f.close()
 
+    #Print the message, and open the files in append mode (mode = 'a')
     print("\n merge all files...")
     f = tables.open_file(args.outfolder + args.study_name + '_step2_merged_genotype.h5', mode='a')
+
+    #For each HDF5 file, append to the file previously created, 'f'
     for i in tqdm.tqdm(range(number_of_files)):
         gen_tmp = h5py.File(filepath_hase.format(i), 'r')['genotype']
         f.root.data.append(np.array(np.round(gen_tmp[:, :]), dtype=np.int))
