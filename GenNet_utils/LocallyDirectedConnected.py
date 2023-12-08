@@ -304,12 +304,18 @@ def get_locallyDirected1D_mask(mask, kernel, data_format,
     ndims = int(mask.ndim / 2)
     indices = np.mat([mask.row, mask.col]).transpose()
 #     print(mask.shape)
+
+    # Generate a sparse tensor for the mask using TF module with specified characteristics                                
     mask = tf.SparseTensor(indices, kernel, [mask.shape[0], mask.shape[1]])
 
     if data_format == 'channels_first':
+        # add an outer axis of length 1
         mask = tf.sparse.expand_dims(mask, 0)
+
+        # align axis for braodcasting
         mask = tf.sparse.expand_dims(mask, - ndims - 1)
 
+    # align axes in similar manner but with flipped axis arguments
     elif data_format == 'channels_last':
         mask = tf.sparse.expand_dims(mask, ndims)
         mask = tf.sparse.expand_dims(mask, -1)
@@ -363,10 +369,17 @@ def local_conv_matmul_sparse(inputs, kernel_mask, output_length, filters):
   Returns:
       Output (N+2)-D tensor with shape `output_shape`.
   """
+    # Reshape the inputs so that it is flattened on a particular axis 
     inputs_flat = K.reshape(inputs, (K.shape(inputs)[0], -1))
+
+    # Reshape the kernel mask tensor into a 2D tensor
     kernel_mask = make_2d_sparse(kernel_mask, split_dim=K.ndim(kernel_mask) // 2)
+
+    # Matrix multiply kernel_mask and flattened inputs
     output_flat = tf.sparse.matmul(kernel_mask, inputs_flat, adjoint_a=True, adjoint_b=True)
     output_flat = tf.transpose(output_flat)
+
+    # Reshape the output_flattened into the required shape
     output = K.reshape(output_flat, [-1, output_length, filters])
 
     return output
@@ -392,6 +405,7 @@ def make_2d_sparse(tensor, split_dim):
     in_dims = shape[:split_dim]
     out_dims = shape[split_dim:]
 
+    # multiply elements in the shape dimension across an axis to accumulate the total in and out size dimensions for reshaping
     in_size = K.math_ops.reduce_prod(in_dims)
     out_size = K.math_ops.reduce_prod(out_dims)
 
