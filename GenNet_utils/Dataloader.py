@@ -158,12 +158,12 @@ def get_data(datapath, genotype_path, set_number):
 
 
 class TrainDataGenerator(K.utils.Sequence):
-"""
-TrainDataGenerator class that inherits from tf.keras.utils.Sequence object for fitting to a sequence of data. Advantage over a typical generator object is that
-this class will guarantee that the network only trains once on each sample per epoch.
-
-Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ methods. 
-"""
+    """
+    TrainDataGenerator class that inherits from tf.keras.utils.Sequence object for fitting to a sequence of data. Advantage over a typical generator object is that
+    this class will guarantee that the network only trains once on each sample per epoch.
+    
+    Every tf.keras.utils.Sequence object must implement __getitem__ and __len__ methods. 
+    """
 
     
     def __init__(self, datapath, genotype_path, batch_size, trainsize, inputsize, epoch_size, shuffle=True, one_hot=False):
