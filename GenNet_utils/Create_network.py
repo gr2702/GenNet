@@ -6,6 +6,7 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import matplotlib
 
+# Set matplotlib backend to 'agg' for non-GUI backend use
 matplotlib.use('agg')
 import tensorflow as tf
 import tensorflow.keras as K
@@ -14,6 +15,7 @@ import tables
 tf.keras.backend.set_epsilon(0.0000001)
 tf_version = tf.__version__  # ToDo use packaging.version
 
+# Check TensorFlow version for compatibility
 if tf_version <= '1.13.1':
     from GenNet_utils.LocallyDirected1D import LocallyDirected1D
 elif tf_version >= '2.0':
@@ -22,7 +24,7 @@ else:
     print("unexpected tensorflow version")
     from GenNet_utils.LocallyDirected1D import LocallyDirected1D
     
-    
+# Create a sample neural network model using the Keras API    
 def example_network():
     mask = scipy.sparse.load_npz('./folder/snps_gene.npz')
     masks = [mask]
@@ -44,14 +46,14 @@ def example_network():
     
     return model, masks
 
-
+# Load data from a CSV file and calculate certain properties related to regression analysis
 def regression_properties(datapath):
     ytrain = pd.read_csv(datapath + "subjects.csv")
     mean_ytrain = float(ytrain[ytrain["set"] == 1]["labels"].mean())
     negative_values_ytrain = float(ytrain[ytrain["set"] == 1]["labels"].min()) < 0
     return mean_ytrain, negative_values_ytrain
 
-
+# Add a block of layers to a model based on given parameters
 def layer_block(model, mask, i, regression, L1_act =0.01):
     if regression:
         activation_type="relu"
@@ -64,7 +66,7 @@ def layer_block(model, mask, i, regression, L1_act =0.01):
     model = K.layers.BatchNormalization(center=False, scale=False)(model)
     return model
 
-
+# Add an activation layer to the model based on the type of problem (regression or classification)
 def activation_layer(model, regression, negative_values_ytrain):
    
     if regression: 
@@ -79,6 +81,7 @@ def activation_layer(model, regression, negative_values_ytrain):
         
     return model
 
+# Process the input layer for one-hot encoding
 def one_hot_input(input_layer):
     model = K.layers.LocallyConnected1D(filters=1, strides=1, kernel_size=1, 
                                             name="SNP_layer", implementation=3
@@ -86,7 +89,7 @@ def one_hot_input(input_layer):
     model = K.layers.Activation('linear', name="snp_activation")(model) 
     return model
     
-
+# Enhance the model by adding covariate information
 def add_covariates(model, input_cov, num_covariates, regression, negative_values_ytrain, mean_ytrain, l1_value, L1_act):
     if num_covariates > 0:
         model = activation_layer(model, regression, negative_values_ytrain)
@@ -98,6 +101,10 @@ def add_covariates(model, input_cov, num_covariates, regression, negative_values
                        bias_initializer= tf.keras.initializers.Constant(mean_ytrain))(model)
     return model
 
+# The following functions are to create different neural network architectures
+# Each function handles specific aspects of the network creation and configuration
+
+# Create a neural network based on numpy .npz masks
 def create_network_from_npz(datapath,
                             inputsize,
                             genotype_path,
@@ -194,7 +201,7 @@ def create_network_from_npz(datapath,
     return model, masks
 
 
-
+# Create a neural network based on a CSV file describing the network topology
 def create_network_from_csv(datapath, 
                             inputsize, 
                             genotype_path,
@@ -260,7 +267,7 @@ def create_network_from_csv(datapath,
 
     return model, masks
 
-
+# Create a simple Lasso regression model
 def lasso(inputsize, l1_value, num_covariates=0, regression=False):
     masks=[]
     inputs = K.Input((inputsize,), name='inputs')
@@ -275,7 +282,7 @@ def lasso(inputsize, l1_value, num_covariates=0, regression=False):
     model = K.Model(inputs=[inputs, input_cov], outputs=output_layer)
     return model, masks
 
-
+# Create a neural network with a locally directed layer and L1 regularization focusing on gene data
 def sparse_directed_gene_l1(datapath, inputsize, l1_value=0.01, L1_act=0.01, one_hot=False):
     
     
@@ -310,7 +317,7 @@ def sparse_directed_gene_l1(datapath, inputsize, l1_value=0.01, L1_act=0.01, one
     
     return model, masks
 
-
+# Create a neural network with multiple filters for gene network analysis
 def gene_network_multiple_filters(datapath, 
                                   inputsize,
                                   genotype_path, 
@@ -376,7 +383,7 @@ def gene_network_multiple_filters(datapath,
     print(model.summary())
     return model, masks
 
-
+# Create a neural network for SNP-gene analysis with multiple filters
 def gene_network_snp_gene_filters(datapath, 
                                   inputsize,
                                   genotype_path, 
@@ -448,7 +455,7 @@ def gene_network_snp_gene_filters(datapath,
     return model, masks
 
 
-
+# Create a regression model for height analysis
 def regression_height(inputsize, num_covariates=2, l1_value=0.001):
     mask = scipy.sparse.load_npz('/home/ahilten/repositories/pheno_height/Input_files/SNP_nearest_gene_mask.npz')
     masks = [mask]
