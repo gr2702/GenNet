@@ -18,9 +18,10 @@ from GenNet_utils.Create_plots import *
 
 
 def weighted_binary_crossentropy(y_true, y_pred):
+    # Adjusting true and predicted values to avoid numerical issues
     y_true = K.backend.clip(tf.cast(y_true, dtype=tf.float32), 0.0001, 1)
     y_pred = K.backend.clip(tf.cast(y_pred, dtype=tf.float32), 0.0001, 1)
-
+    # Compute weighted binary crossentropy
     return K.backend.mean(
         -y_true * K.backend.log(y_pred + 0.0001) * weight_positive_class - (1 - y_true) * K.backend.log(
             1 - y_pred + 0.0001) * weight_negative_class)
@@ -28,8 +29,12 @@ def weighted_binary_crossentropy(y_true, y_pred):
 
 def train_classification(args):
     SlURM_JOB_ID = get_SLURM_id()
+    
+    # Initialize variables for model and masks
     model = None
     masks = None
+    
+    # Setting up paths and training parameters from the input arguments
     datapath = args.path
     jobid = args.ID
     wpc = args.wpc
@@ -43,34 +48,42 @@ def train_classification(args):
     patience = args.patience
     one_hot=args.onehot
 
+    # Determine genotype path
     if args.genotype_path == "undefined":
         genotype_path = datapath
     else:
         genotype_path = args.genotype_path
 
+    # Enable mixed precision if specified
     if args.mixed_precision == True:
         use_mixed_precision()
-        
+
+    # Set multiprocessing based on the number of workers specified
     if args.workers > 1:
         multiprocessing = True
     else:
         multiprocessing = False
-        
+
+    # Check data integrity and format
     check_data(datapath=datapath, genotype_path=genotype_path, mode=problem_type)
 
+    # Initialize global variables for class weights
     global weight_positive_class, weight_negative_class
 
     weight_positive_class = wpc
     weight_negative_class = 1
 
+    # Set up the optimizer for the model
     optimizer_model = tf.keras.optimizers.Adam(lr=lr_opt)
 
+    # Calculate dataset sizes for training, validation, and test sets
     train_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 1)
     val_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 2)
     test_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 3)
     num_covariates = pd.read_csv(datapath + "subjects.csv").filter(like='cov_').shape[1]
     val_size_train = val_size
 
+    # Adjust epoch size if specified
     if args.epoch_size is None:
         args.epoch_size = train_size
     else:
@@ -78,6 +91,7 @@ def train_classification(args):
         print("Using each epoch", args.epoch_size,"randomly selected training examples")
         print("Validation set size used during training is also set to half the epoch_size")
 
+    # Determine input size for the network
     inputsize = get_inputsize(genotype_path)
 
     folder, resultpath = get_paths(args)
@@ -126,12 +140,15 @@ def train_classification(args):
                                                    l1_value=l1_value, L1_act =L1_act, num_covariates=num_covariates, 
                                                    mask_order=args.mask_order, one_hot=one_hot)
 
+    # Compile the model with the custom loss function and optimizer
     model.compile(loss=weighted_binary_crossentropy, optimizer=optimizer_model,
                   metrics=["accuracy", sensitivity, specificity])
 
+    # Save the model architecture to a file
     with open(resultpath + '/model_architecture.txt', 'w') as fh:
         model.summary(print_fn=lambda x: fh.write(x + '\n'))
 
+    # Set up callbacks for training
     csv_logger = K.callbacks.CSVLogger(resultpath + 'train_log.csv', append=True)
     
     early_stop = K.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.0001, patience=patience, verbose=1, mode='auto',
@@ -250,8 +267,12 @@ def train_classification(args):
 
 def train_regression(args):
     SlURM_JOB_ID = get_SLURM_id()
+
+    # Initialize variables for model and masks
     model = None
     masks = None
+
+    # Setting up paths and parameters from the input arguments
     datapath = args.path
     jobid = args.ID
     lr_opt = args.learning_rate
@@ -263,28 +284,38 @@ def train_regression(args):
     patience = args.patience
     one_hot = args.onehot
 
+    # Determine genotype path
     if args.genotype_path == "undefined":
         genotype_path = datapath
     else:
         genotype_path = args.genotype_path
-    
+
+    # Enable mixed precision if specified
     if args.mixed_precision == True:
         use_mixed_precision()
-        
+
+    # Set multiprocessing based on the number of workers specified
     if args.workers > 1:
         multiprocessing = True
     else:
         multiprocessing = False
-    
+
+    # Check data integrity and format
     check_data(datapath=datapath, genotype_path=genotype_path, mode=problem_type)
 
+    # Set up the optimizer for the model
     optimizer_model = tf.keras.optimizers.Adam(lr=lr_opt)
 
+    # Calculate dataset sizes for training, validation, and test sets
     train_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 1)
     val_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 2)
     test_size = sum(pd.read_csv(datapath + "subjects.csv")["set"] == 3)
     num_covariates = pd.read_csv(datapath + "subjects.csv").filter(like='cov_').shape[1]
+
+    # Determine input size for the network
     inputsize = get_inputsize(genotype_path)
+    
+    # Adjust validation set size based on the epoch size parameter
     val_size_train = val_size
 
     if args.epoch_size is None:
@@ -336,12 +367,14 @@ def train_regression(args):
                                                    l1_value=l1_value, L1_act =L1_act, regression=True, one_hot=one_hot,
                                                    num_covariates=num_covariates)
 
+    # Compile the model for regression with MSE loss
     model.compile(loss="mse", optimizer=optimizer_model,
                   metrics=["mse"])
 
     with open(resultpath + '/model_architecture.txt', 'w') as fh:
         model.summary(print_fn=lambda x: fh.write(x + '\n'))
-        
+
+    # Set up callbacks for training
     csv_logger = K.callbacks.CSVLogger(resultpath + 'train_log.csv', append=True)
     early_stop = K.callbacks.EarlyStopping(monitor='val_loss', min_delta=0.0001, patience=patience, verbose=1, mode='auto',
                                            restore_best_weights=True)
