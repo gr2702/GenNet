@@ -26,6 +26,7 @@ from tensorflow.python.keras.utils import conv_utils
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.util.tf_export import keras_export
 
+# Define LocallyDirected1D as a subclass of Layer
 @keras_export('keras.layers.LocallyConnected1D')
 class LocallyDirected1D(Layer):
     """Locally-Directed1D layer for 1D inputs.
@@ -130,36 +131,45 @@ class LocallyDirected1D(Layer):
         self.mask_indices = []
         self.input_filters = None
 
+    # Convert input shape to the correct format and build the layer
     @tf_utils.shape_type_conversion
     def build(self, input_shape):
+        
+        # Extract input dimensions based on data format
         if self.data_format == 'channels_first':
             input_dim, input_length = input_shape[1], input_shape[2]
         else:
             input_dim, input_length = input_shape[2], input_shape[1]
 
+        # Check if input_dim is defined
         if input_dim is None:
             raise ValueError('Axis 2 of input should be fully-defined. '
                              'Found shape:', input_shape)
             
+        # Store input filter dimensions and output length based on mask shape
         self.input_filters = input_dim
         self.output_length = self.mask.shape[1] 
 
+        # Determine kernel shape based on data format
         if self.data_format == 'channels_first':
             self.kernel_shape = (input_dim, input_length,
                                  self.filters, self.output_length)
         else:
             self.kernel_shape = (input_length, input_dim,
                                  self.output_length, self.filters)
-        
+
+        # Initialize kernel weights with specified shape
         self.kernel = self.add_weight(shape=(len(self.mask.data), input_dim*self.filters ),    
         #sum of all nonzero values in mask sum(sum(mask))
                             initializer=self.kernel_initializer,
                             name='kernel',
                             regularizer=self.kernel_regularizer,
                             constraint=self.kernel_constraint)
-                        
+        
+        # Store the indices of the sparse matrix (mask)                
         self.mask_indices = np.array([self.mask.row, self.mask.col]).T
 
+        # Add bias weights if use_bias is True
         if self.use_bias:
             self.bias = self.add_weight(
                 shape=(self.output_length, self.filters * self.input_filters),
@@ -169,13 +179,16 @@ class LocallyDirected1D(Layer):
                 constraint=self.bias_constraint)
         else:
             self.bias = None
-
+        # Define input specifications based on data format
         if self.data_format == 'channels_first':
             self.input_spec = InputSpec(ndim=3, axes={1: input_dim})
         else:
             self.input_spec = InputSpec(ndim=3, axes={-1: input_dim})
+        
+        # Mark the layer as built
         self.built = True
-
+        
+    # Implement the forward pass of the layer
     def call(self, inputs):
         
         output_filters = []
@@ -196,7 +209,7 @@ class LocallyDirected1D(Layer):
         output = self.activation(output)
         return output
    
-
+    # Get the configuration of the layer
     def get_config(self):
         config = {
             # 'mask':  # replace by two numpy arrays with indices
