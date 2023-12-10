@@ -190,22 +190,32 @@ class LocallyDirected1D(Layer):
         
     # Implement the forward pass of the layer
     def call(self, inputs):
-        
+
+        # List to store output for each input filter
         output_filters = []
-   
+
+        # Iterate through each input filter
         for input_filter_n in range(self.input_filters): 
+            # Iterate through each filter in the layer
             for i in range(self.filters):
+                 # Create a weight matrix based on the sparse mask
                 weight_matrix = tf.scatter_nd(self.mask_indices, self.kernel[:,i], (self.mask.shape[0], self.mask.shape[1]))
+
+                # Perform matrix multiplication between inputs and the weight matrix and reshape the output matrix
                 output_mat = tf.matmul(inputs[:,:,input_filter_n], weight_matrix) # 
                 output_mat = Kb.reshape(output_mat, [-1, self.output_length, 1])  
-                output_filters.append(output_mat)
 
+                # Append the output matrix to the list
+                output_filters.append(output_mat)
         
+        # Concatenate output matrices along the last axis
         output = concat(output_filters, axis=-1)   
-        
+
+        # Add bias if specified
         if self.use_bias:
             output = Kb.bias_add(output, self.bias, data_format=self.data_format)
-
+            
+        # Apply activation function to the final output
         output = self.activation(output)
         return output
    
