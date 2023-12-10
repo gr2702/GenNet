@@ -221,6 +221,8 @@ class LocallyDirected1D(Layer):
    
     # Get the configuration of the layer
     def get_config(self):
+
+        # Dictionary to store the configuration
         config = {
             # 'mask':  # replace by two numpy arrays with indices
             # self.mask,
@@ -249,7 +251,11 @@ class LocallyDirected1D(Layer):
             'bias_constraint':
                 constraints.serialize(self.bias_constraint),
         }
+        
+        # Get the base configuration using the superclass method
         base_config = super(LocallyDirected1D, self).get_config()
+
+        # Combine and return the base configuration and layer-specific configuration
         return dict(list(base_config.items()) + list(config.items()))
 
 
